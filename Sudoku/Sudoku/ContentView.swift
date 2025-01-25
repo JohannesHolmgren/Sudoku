@@ -87,7 +87,13 @@ struct Board: View {
     
     let sideSize = 9
     
-    let highlights = Array(repeating: Array(repeating: false, count: 9), count: 9)
+    @State private var highlights = Array(repeating: Array(repeating: false, count: 9), count: 9)
+    
+    // Used to update selected box
+    func setSelected(row: Int, col: Int) -> Void {
+        selectedBox.0 = row
+        selectedBox.1 = col
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -96,37 +102,105 @@ struct Board: View {
             let boxSize = boardSize / CGFloat(sideSize)
             VStack {
                 Spacer()
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: sideSize), spacing: 0) {
-                    ForEach (0..<sideSize, id: \.self) { col in
+                ZStack {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: sideSize), spacing: 0) {
                         ForEach (0..<sideSize, id: \.self) { row in
-                            let text = grid[col][row] != 0 ? "\(grid[col][row])": " "
-                            Button(text) {
-                                selectedBox.0 = col
-                                selectedBox.1 = row
+                            ForEach (0..<sideSize, id: \.self) { col in
+                                NumberBox(row: row, col: col, content: grid[row][col], boxSize: boxSize, selectedBox: $selectedBox, onPress: self.setSelected)
                             }
-                            .frame(width: boxSize, height: boxSize)
-                            .contentShape(Rectangle())
-                            .font(.system(size: boxSize * 0.6))
-                            .foregroundStyle(Color.black)
-                            .background(
-                                selectedBox.0 == col && selectedBox.1 == row
-                                    ? Color.yellow.opacity(0.5)
-                                    : selectedBox.0 == col || selectedBox.1 == row
-                                        ? Color.yellow.opacity(0.2)
-                                        : Color.clear
-                            )
-                            .overlay(
-                                Rectangle()
-                                    .stroke(Color.black)
-                            )
+                            
                         }
                     }
+                    // Bold lines between each 3x3 box
+                    Separators(boxSize: boxSize, boardSize: boardSize)
+                    
                 }
                 Spacer()
                 Spacer()
             }
         }
         .padding()
+    }
+}
+
+struct NumberBox: View {
+    let row: Int
+    let col: Int
+    let content: Int
+    let boxSize: CGFloat
+    @Binding var selectedBox: (Int, Int)
+    var onPress: (Int, Int) -> Void
+    
+    let highlightColor = Color.yellow
+    
+    // Setup border logic
+    
+    
+    var body: some View {
+        // Set box to be empty if not nubmers 1-9
+        let text = content != 0 ? "\(content)": " "
+        Button(text) {
+            onPress(row, col)
+        }
+        .frame(width: boxSize, height: boxSize)
+        .contentShape(Rectangle())
+        .font(.system(size: boxSize * 0.8))
+        .foregroundStyle(Color.black)
+        .background(
+            selectedBox.0 == row && selectedBox.1 == col
+                ? highlightColor.opacity(0.5)
+                : selectedBox.0 == row || selectedBox.1 == col
+                    ? highlightColor.opacity(0.2)
+                    : Color.clear
+        )
+        .overlay(
+            Rectangle()
+                .stroke(Color.black.opacity(0.2))
+        )
+    }
+    
+}
+
+struct Separators: View {
+    let boxSize: CGFloat
+    let boardSize: CGFloat
+    let borderWidth: CGFloat = 2
+    
+    var body: some View {
+        // Vertical bold lines
+        Rectangle()
+            .frame(width: borderWidth, height: boardSize)
+            .foregroundColor(Color.black)
+            .offset(x: boxSize * -4.5)
+        Rectangle()
+            .frame(width: borderWidth, height: boardSize)
+            .foregroundColor(Color.black)
+            .offset(x: boxSize * -1.5)
+        Rectangle()
+            .frame(width: borderWidth, height: boardSize)
+            .foregroundColor(Color.black)
+            .offset(x: boxSize * 1.5)
+        Rectangle()
+            .frame(width: borderWidth, height: boardSize)
+            .foregroundColor(Color.black)
+            .offset(x: boxSize * 4.5)
+        // Horizontal bold lines
+        Rectangle()
+            .frame(width: boardSize, height: borderWidth)
+            .foregroundColor(Color.black)
+            .offset(y: boxSize * -4.5)
+        Rectangle()
+            .frame(width: boardSize, height: borderWidth)
+            .foregroundColor(Color.black)
+            .offset(y: boxSize * -1.5)
+        Rectangle()
+            .frame(width: boardSize, height: borderWidth)
+            .foregroundColor(Color.black)
+            .offset(y: boxSize * 1.5)
+        Rectangle()
+            .frame(width: boardSize, height: borderWidth)
+            .foregroundColor(Color.black)
+            .offset(y: boxSize * 4.5)
     }
 }
 
@@ -138,7 +212,6 @@ struct ContentView: View {
         VStack {
             Spacer()
             Board(selectedBox: $selectedBox, grid: $grid)
-            Spacer()
             NumberButtons(selectedBox: $selectedBox, grid: $grid)
         }
         
