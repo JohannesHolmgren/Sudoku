@@ -9,6 +9,8 @@ import SwiftUI
 
 // ===== Functions for Sudoku logic =====
 enum SudokuError: Error {
+    case missingSet(String)
+    case missingRow(Int)
     case invalidBoard
 }
 
@@ -58,9 +60,23 @@ func generateSudoku() async -> [[Int]] {
     // Then iterate all other positions and fill with random numbers
     // that do not collide
     
+    
     // ----- Step 1: Create a filled in board -----
+    // Define sets for each row, col and box
+    let rowSets = Array(repeating: Set<Int>(), count: 9)
+    let colSets = Array(repeating: Set<Int>(), count: 9)
+    let boxSets = Array(repeating: Set<Int>(), count: 9)
+    // var sets = ["rows": rowSets, "cols": colSets, "boxes": boxSets]
+    
+    var sets = (rowSets, colSets, boxSets)
+    
     var board = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-    createFilledBoard(board: &board)
+    createFilledBoard(board: &board, sets: &sets)
+    
+    // Check if valid
+    if !isValidSudoku(grid: board) {
+        print("Error: Invalid board")
+    }
     
     // ----- Step 2: Remove some numbers from the grid -----
     let nToRemove = 10
@@ -105,33 +121,45 @@ func hasUniqueSolution(board: [[Int]], removed: (Int, Int)) -> Bool {
     return true
 }
 
-func createFilledBoard(board: inout [[Int]]) {
+
+func createFilledBoard(board: inout [[Int]], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>]) ) { // Dictionary<String, [Set<Int>]>) {
     // 1. Fill diagonal 3x3 with random numbers 1-9
-    initializeDiagonalBoxes(board: &board)
+    initializeDiagonalBoxes(board: &board, sets: &sets)
     
     // 2. Get all remaining positions (those that are not in the diagonals
     let remainingPositions = getRemainingPositions().shuffled()
     
     // 3. Fill remaining boxes to complete a valid sudoku
-    let _ = fillSudoku(board: &board, remainingPositions: remainingPositions)
+    let _ = fillSudoku(board: &board, remainingPositions: remainingPositions, sets: &sets)
     
     // Check if valid sudoku
     // ...
     
 }
 
-func initializeDiagonalBoxes(board: inout [[Int]]) {
+func initializeDiagonalBoxes(board: inout [[Int]], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) {
     // Create empty sudoku board
-    // var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-    
     // All 3 diagonal boxes are indpendent from each other. Start with placing
     // 1-9 randomly in each of these boxes
+    
     for diagIndex in 0..<3 {
-        let startIndex = diagIndex * 3
         var digits = (1..<10).shuffled()
         for i in 0..<3 {
             for j in 0..<3 {
-                board[i + startIndex][j + startIndex] = digits.popLast() ?? 0
+                // Fill board
+                let rowIndex = i + diagIndex * 3
+                let colIndex = j + diagIndex * 3
+                let digit = digits.popLast() ?? 0
+                addNumberToBoard(num: digit, pos: (rowIndex, colIndex), board: &board, sets: &sets)
+                
+                
+                /*
+                board[rowIndex][colIndex] = digit
+                // Add to sets for each row, col and box to keep track of allowed
+                (sets.0)[rowIndex].insert(digit)
+                (sets.1)[colIndex].insert(digit)
+                (sets.2)[boxIndex].insert(digit)
+                 */
             }
         }
     }
@@ -168,54 +196,75 @@ func getRemainingPositions() -> [(Int, Int)] {
 }
 
 
-func fillSudoku(board: inout [[Int]], remainingPositions: [(Int, Int)]) -> Bool {
+func fillSudoku(board: inout [[Int]], remainingPositions: [(Int, Int)], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) -> Bool {
     var positions = remainingPositions
     guard let (i, j) = positions.popLast() else { return true }
     
     let digits = (1..<10).shuffled()
     for num in digits {
-        if isValidDigit(board: board, pos: (i, j), num: num) {
+        if isValidDigit(board: board, pos: (i, j), num: num, sets: &sets) {
             board[i][j] = num
-            if fillSudoku(board: &board, remainingPositions: positions) {
+            // Update all sets to say that the digit is here
+            addNumberToBoard(num: num, pos: (i, j), board: &board, sets: &sets)
+            
+            if fillSudoku(board: &board, remainingPositions: positions, sets: &sets) {
                 return true
             }
-            board[i][j] = 0
+            // Did not work from here. Reset board
+            removeNumberFromBoard(num: num, pos: (i, j), board: &board, sets: &sets)
         }
     }
     return false
+    
 }
  
 
-func isValidDigit(board: [[Int]], pos: (Int, Int), num: Int) -> Bool {
-    let (i, j) = pos
+func isValidDigit(board: [[Int]], pos: (Int, Int), num: Int, sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) -> Bool {
+    let (rowIndex, colIndex) = pos
+    let boxIndex = Int(floor(Double(rowIndex / 3)) + floor(Double(colIndex / 3)) * 3)
+    
     // Check row
-    for m in 0..<9 {
-        if m == i { continue }
-        if board[m][j] == num {
-            return false
-        }
+    if (sets.0)[rowIndex].contains(num) {
+        return false
     }
     // Check col
-    for m in 0..<9 {
-        if m == j { continue }
-        if board[i][m] == num {
-            return false
-        }
+    if (sets.1)[colIndex].contains(num) {
+        return false
     }
     // Check box
-    let boxStart = (i / 3, j / 3)
-    for m in 0..<3 {
-        for n in 0..<3 {
-            let bi = boxStart.0 * 3 + m
-            let bj = boxStart.1 * 3 + n
-            if (bi, bj) == (i, j) { continue }
-            if board[bi][bj] == num {
-                return false
-            }
-        }
+    if (sets.2)[boxIndex].contains(num) {
+        return false
     }
     
     return true
+}
+
+func addNumberToBoard(num: Int, pos: (Int, Int), board: inout [[Int]], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) {
+    // Get indices
+    let (rowIndex, colIndex) = pos
+    let boxIndex = Int(floor(Double(rowIndex / 3)) + floor(Double(colIndex / 3)) * 3)
+    
+    // Update board
+    board[rowIndex][colIndex] = num
+    
+    // Update sets
+    (sets.0)[rowIndex].insert(num)
+    (sets.1)[colIndex].insert(num)
+    (sets.2)[boxIndex].insert(num)
+}
+
+func removeNumberFromBoard(num: Int, pos: (Int, Int), board: inout [[Int]], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) {
+    // Get indices
+    let (rowIndex, colIndex) = pos
+    let boxIndex = Int(floor(Double(rowIndex / 3)) + floor(Double(colIndex / 3)) * 3)
+    
+    // Update board
+    board[rowIndex][colIndex] = 0
+    
+    // Update sets
+    (sets.0)[rowIndex].remove(num)
+    (sets.1)[colIndex].remove(num)
+    (sets.2)[boxIndex].remove(num)
 }
 
 
@@ -403,11 +452,6 @@ struct ContentView: View {
     
     func generateNewSudoku() async {
         isLoading = true
-        do {
-            try await Task.sleep(nanoseconds: 5_000_000_000)
-        } catch {
-            print("Could not sleep :(")
-        }
         grid = await generateSudoku()
         isLoading = false
     }
