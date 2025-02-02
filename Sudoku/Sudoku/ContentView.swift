@@ -49,7 +49,7 @@ func isValidSudoku(grid: [[Int]]) -> Bool {
     return true
 }
 
-func generateSudoku() -> [[Int]] {
+func generateSudoku() async -> [[Int]] {
     /* Solve a sudoku board using backtracking */
     
     // Strategy:
@@ -59,7 +59,8 @@ func generateSudoku() -> [[Int]] {
     // that do not collide
     
     // ----- Step 1: Create a filled in board -----
-    var board = createFilledBoard()
+    var board = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    createFilledBoard(board: &board)
     
     // ----- Step 2: Remove some numbers from the grid -----
     let nToRemove = 10
@@ -70,8 +71,8 @@ func generateSudoku() -> [[Int]] {
 
 func removeRandomNumbers(from board: inout [[Int]], n: Int) {
     var allPositions: [(Int, Int)] = []
-    for i in 0..<10 {
-        for j in 0..<10 {
+    for i in 0..<9 {
+        for j in 0..<9 {
             allPositions.append((i, j))
         }
     }
@@ -96,6 +97,7 @@ func removeNumbers(from board: inout [[Int]], n: Int, allPositions: [(Int, Int)]
             board[pos.0][pos.1] = saved
         }
     }
+    return false
 }
 
 /* Check if board has a unique solution */
@@ -103,25 +105,24 @@ func hasUniqueSolution(board: [[Int]], removed: (Int, Int)) -> Bool {
     return true
 }
 
-func createFilledBoard() -> [[Int]] {
+func createFilledBoard(board: inout [[Int]]) {
     // 1. Fill diagonal 3x3 with random numbers 1-9
-    var grid = initializeDiagonalBoxes()
+    initializeDiagonalBoxes(board: &board)
     
     // 2. Get all remaining positions (those that are not in the diagonals
     let remainingPositions = getRemainingPositions().shuffled()
     
     // 3. Fill remaining boxes to complete a valid sudoku
-    let _ = fillSudoku(grid: &grid, remainingPositions: remainingPositions)
+    let _ = fillSudoku(board: &board, remainingPositions: remainingPositions)
     
     // Check if valid sudoku
     // ...
     
-    return grid
 }
 
-func initializeDiagonalBoxes() -> [[Int]] {
+func initializeDiagonalBoxes(board: inout [[Int]]) {
     // Create empty sudoku board
-    var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    // var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
     
     // All 3 diagonal boxes are indpendent from each other. Start with placing
     // 1-9 randomly in each of these boxes
@@ -130,11 +131,10 @@ func initializeDiagonalBoxes() -> [[Int]] {
         var digits = (1..<10).shuffled()
         for i in 0..<3 {
             for j in 0..<3 {
-                grid[i + startIndex][j + startIndex] = digits.popLast() ?? 0
+                board[i + startIndex][j + startIndex] = digits.popLast() ?? 0
             }
         }
     }
-    return grid
 }
 
 
@@ -168,37 +168,37 @@ func getRemainingPositions() -> [(Int, Int)] {
 }
 
 
-func fillSudoku(grid: inout [[Int]], remainingPositions: [(Int, Int)]) -> Bool {
+func fillSudoku(board: inout [[Int]], remainingPositions: [(Int, Int)]) -> Bool {
     var positions = remainingPositions
     guard let (i, j) = positions.popLast() else { return true }
     
     let digits = (1..<10).shuffled()
     for num in digits {
-        if isValidDigit(grid: grid, pos: (i, j), num: num) {
-            grid[i][j] = num
-            if fillSudoku(grid: &grid, remainingPositions: positions) {
+        if isValidDigit(board: board, pos: (i, j), num: num) {
+            board[i][j] = num
+            if fillSudoku(board: &board, remainingPositions: positions) {
                 return true
             }
-            grid[i][j] = 0
+            board[i][j] = 0
         }
     }
     return false
 }
  
 
-func isValidDigit(grid: [[Int]], pos: (Int, Int), num: Int) -> Bool {
+func isValidDigit(board: [[Int]], pos: (Int, Int), num: Int) -> Bool {
     let (i, j) = pos
     // Check row
     for m in 0..<9 {
         if m == i { continue }
-        if grid[m][j] == num {
+        if board[m][j] == num {
             return false
         }
     }
     // Check col
     for m in 0..<9 {
         if m == j { continue }
-        if grid[i][m] == num {
+        if board[i][m] == num {
             return false
         }
     }
@@ -209,7 +209,7 @@ func isValidDigit(grid: [[Int]], pos: (Int, Int), num: Int) -> Bool {
             let bi = boxStart.0 * 3 + m
             let bj = boxStart.1 * 3 + n
             if (bi, bj) == (i, j) { continue }
-            if grid[bi][bj] == num {
+            if board[bi][bj] == num {
                 return false
             }
         }
@@ -380,17 +380,39 @@ struct Separators: View {
 
 struct ContentView: View {
     @State private var selectedBox = (0, 0)
-    @State private var grid = generateSudoku() // Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    @State private var grid =  Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    @State private var isLoading = false
     
     var body: some View {
         VStack {
-            Spacer()
-            Board(selectedBox: $selectedBox, grid: $grid)
-            NumberButtons(selectedBox: $selectedBox, grid: $grid)
+            if isLoading {
+                ProgressView("Generating Sudoku...")
+            } else {
+                VStack {
+                    Spacer()
+                    Board(selectedBox: $selectedBox, grid: $grid)
+                    NumberButtons(selectedBox: $selectedBox, grid: $grid)
+                }
+            }
         }
-        
+        .padding()
+        .task {
+            await generateNewSudoku()
+        }
+    }
+    
+    func generateNewSudoku() async {
+        isLoading = true
+        do {
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+        } catch {
+            print("Could not sleep :(")
+        }
+        grid = await generateSudoku()
+        isLoading = false
     }
 }
+
 
 #Preview {
     ContentView()
