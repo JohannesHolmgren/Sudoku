@@ -12,6 +12,7 @@ enum SudokuError: Error {
     case missingSet(String)
     case missingRow(Int)
     case invalidBoard
+    case invalidDifficulty
 }
 
 func isValidSudoku(grid: [[Int]]) -> Bool {
@@ -51,7 +52,7 @@ func isValidSudoku(grid: [[Int]]) -> Bool {
     return true
 }
 
-func generateSudoku() async -> [[Int]] {
+func generateSudoku(difficulty: String) async -> [[Int]] {
     /* Solve a sudoku board using backtracking */
     
     // Strategy:
@@ -59,6 +60,14 @@ func generateSudoku() async -> [[Int]] {
     // => can fill them with numbers 1-9 as we please
     // Then iterate all other positions and fill with random numbers
     // that do not collide
+    
+    // Map of difficulties
+    let difficulties = [
+        "easy": 25,
+        "medium": 35,
+        "hard": 45,
+        "difficult": 55
+    ]
     
     
     // ----- Step 1: Create a filled in board -----
@@ -79,46 +88,92 @@ func generateSudoku() async -> [[Int]] {
     }
     
     // ----- Step 2: Remove some numbers from the grid -----
-    let nToRemove = 10
-    removeRandomNumbers(from: &board, n: nToRemove)
+    guard let nToRemove = difficulties[difficulty.lowercased()] else {print("Error: could not load difficulty"); return board}
+    removeRandomNumbers(from: &board, n: nToRemove, sets: &sets)
+    
     
     return board
 }
 
-func removeRandomNumbers(from board: inout [[Int]], n: Int) {
+func removeRandomNumbers(from board: inout [[Int]], n: Int, sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) {
     var allPositions: [(Int, Int)] = []
     for i in 0..<9 {
         for j in 0..<9 {
             allPositions.append((i, j))
         }
     }
-    let _ = removeNumbers(from: &board, n: n, allPositions: allPositions.shuffled())
+
+    let _ = removeNumbers(from: &board, n: n, allPositions: allPositions.shuffled(), sets: &sets)
+    
 }
 
-func removeNumbers(from board: inout [[Int]], n: Int, allPositions: [(Int, Int)]) -> Bool {
+func removeNumbers(from board: inout [[Int]], n: Int, allPositions: [(Int, Int)], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) -> Bool {
     if n == 0 {
+        // print("Success")
         return true
     }
     var positions = allPositions
+    var removedPositions: [(Int, Int)] = []
     while true {
-        guard let pos = positions.popLast() else { return false }
+        guard let pos = positions.popLast() else {
+            // print("No more possibilities")
+            return false
+        }
+        removedPositions.append(pos)
         // Check if has unique solution when this is removed
-        if hasUniqueSolution(board: board, removed: pos) {
-            let saved = board[pos.0][pos.1]
-            board[pos.0][pos.1] = 0
-            if removeNumbers(from: &board, n: n - 1, allPositions: positions) {
+        let saved = board[pos.0][pos.1]
+        removeNumberFromBoard(num: saved, pos: pos, board: &board, sets: &sets)
+        // print("\(n): Size of removed positions: \(removedPositions.count)")
+        
+        board[pos.0][pos.1] = 0
+        if hasUniqueSolution(board: board, removedPositions: removedPositions, sets: &sets) {
+            // print("\(n): Unique solution for \(pos). positions size: \(positions.count)")
+            if removeNumbers(from: &board, n: n - 1, allPositions: positions, sets: &sets) {
+                // print("Removed number at \(pos)")
                 return true
             }
-            // Reset board
-            board[pos.0][pos.1] = saved
         }
+        // Reset board
+        addNumberToBoard(num: saved, pos: pos, board: &board, sets: &sets)
+        _ = removedPositions.popLast()
+        
+        
     }
     return false
 }
 
+func hasUniqueSolution(board: [[Int]], removedPositions: [(Int, Int)], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) -> Bool {
+    return countNumberofSolutions(board: board, remainingPositions: removedPositions, sets: &sets) == 1
+}
+
 /* Check if board has a unique solution */
-func hasUniqueSolution(board: [[Int]], removed: (Int, Int)) -> Bool {
-    return true
+func countNumberofSolutions(board: [[Int]], remainingPositions: [(Int, Int)], sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) -> Int {
+    // Try to solve board from here and return number of solutions
+    var newBoard = board
+    var positions = remainingPositions
+    guard let (i, j) = positions.popLast() else { return 1 }
+    
+    var nSolutions = 0
+    let digits = (1...9).shuffled()
+    for num in digits {
+        if isValidDigit(board: board, pos: (i, j), num: num, sets: &sets) {
+            newBoard[i][j] = num
+            // Update all sets to say that the digit is here
+            addNumberToBoard(num: num, pos: (i, j), board: &newBoard, sets: &sets)
+            
+            // Count number of solutions from here
+            nSolutions += countNumberofSolutions(board: newBoard, remainingPositions: positions, sets: &sets)
+            if nSolutions > 1 {
+                return nSolutions
+            }
+            
+            // Try next number
+            removeNumberFromBoard(num: num, pos: (i, j), board: &newBoard, sets: &sets)
+        }
+    }
+    
+    return nSolutions
+    
 }
 
 
@@ -133,6 +188,7 @@ func createFilledBoard(board: inout [[Int]], sets: inout ([Set<Int>], [Set<Int>]
     let _ = fillSudoku(board: &board, remainingPositions: remainingPositions, sets: &sets)
     
     // Check if valid sudoku
+    
     // ...
     
 }
@@ -151,15 +207,6 @@ func initializeDiagonalBoxes(board: inout [[Int]], sets: inout ([Set<Int>], [Set
                 let colIndex = j + diagIndex * 3
                 let digit = digits.popLast() ?? 0
                 addNumberToBoard(num: digit, pos: (rowIndex, colIndex), board: &board, sets: &sets)
-                
-                
-                /*
-                board[rowIndex][colIndex] = digit
-                // Add to sets for each row, col and box to keep track of allowed
-                (sets.0)[rowIndex].insert(digit)
-                (sets.1)[colIndex].insert(digit)
-                (sets.2)[boxIndex].insert(digit)
-                 */
             }
         }
     }
@@ -431,6 +478,7 @@ struct ContentView: View {
     @State private var selectedBox = (0, 0)
     @State private var grid =  Array(repeating: Array(repeating: 0, count: 9), count: 9)
     @State private var isLoading = false
+    @State private var difficulty = "easy"
     
     var body: some View {
         VStack {
@@ -452,7 +500,7 @@ struct ContentView: View {
     
     func generateNewSudoku() async {
         isLoading = true
-        grid = await generateSudoku()
+        grid = await generateSudoku(difficulty: difficulty)
         isLoading = false
     }
 }
