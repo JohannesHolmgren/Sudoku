@@ -51,7 +51,7 @@ func isValidSudoku(grid: [[Int]]) -> Bool {
     return true
 }
 
-func generateSudoku(difficulty: String) async -> [[Int]] {
+func generateSudoku(difficulty: String) async -> ([[Int]], [[Int]]) {
     /* Solve a sudoku board using backtracking */
     
     // Strategy:
@@ -80,6 +80,7 @@ func generateSudoku(difficulty: String) async -> [[Int]] {
     
     var board = Array(repeating: Array(repeating: 0, count: 9), count: 9)
     createFilledBoard(board: &board, sets: &sets)
+    var filledBoard = board
     
     // Check if valid
     if !isValidSudoku(grid: board) {
@@ -87,11 +88,11 @@ func generateSudoku(difficulty: String) async -> [[Int]] {
     }
     
     // ----- Step 2: Remove some numbers from the grid -----
-    guard let nToRemove = difficulties[difficulty.lowercased()] else {print("Error: could not load difficulty"); return board}
+    guard let nToRemove = difficulties[difficulty.lowercased()] else {print("Error: could not load difficulty"); return (board, filledBoard)}
     removeRandomNumbers(from: &board, n: nToRemove, sets: &sets)
     
     
-    return board
+    return (board, filledBoard)
 }
 
 func removeRandomNumbers(from board: inout [[Int]], n: Int, sets: inout ([Set<Int>], [Set<Int>], [Set<Int>])) {

@@ -9,23 +9,22 @@ import SwiftUI
 
 
 struct Game {
-    var board: [[Int]]
-    var solution: [[Int]]
-    var selected : (Int, Int)
-    
-    
+    var board: [[Int]] = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    var solution: [[Int]] = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    var selected : (Int, Int) = (0, 0)
 }
 
 
 struct NumberButtons: View {
-    @Binding var selectedBox: (Int, Int)
-    @Binding var grid: [[Int]]
+    @Binding var game: Game
+    // @Binding var selectedBox: (Int, Int)
+    // @Binding var grid: [[Int]]
     
     @State private var selectedNumber: Int? = nil
     
     // Callback for when pressing a number
     func fillNumber(num: Int) {
-        grid[selectedBox.0][selectedBox.1] = num
+        game.board[game.selected.0][game.selected.1] = num
     }
     
     var body: some View {
@@ -54,8 +53,9 @@ struct NumberButton: View {
 
 
 struct Board: View {
-    @Binding var selectedBox: (Int, Int)
-    @Binding var grid: [[Int]]
+    @Binding var game: Game
+//    var selectedBox = game.selected
+//    var grid = game.board
     
     let sideSize = 9
     
@@ -63,8 +63,8 @@ struct Board: View {
     
     // Used to update selected box
     func setSelected(row: Int, col: Int) -> Void {
-        selectedBox.0 = row
-        selectedBox.1 = col
+        game.selected.0 = row
+        game.selected.1 = col
     }
     
     var body: some View {
@@ -78,7 +78,7 @@ struct Board: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: sideSize), spacing: 0) {
                         ForEach (0..<sideSize, id: \.self) { row in
                             ForEach (0..<sideSize, id: \.self) { col in
-                                NumberBox(row: row, col: col, content: grid[row][col], boxSize: boxSize, selectedBox: $selectedBox, onPress: self.setSelected)
+                                NumberBox(row: row, col: col, content: game.board[row][col], boxSize: boxSize, game: $game, onPress: self.setSelected)
                             }
                             
                         }
@@ -100,7 +100,8 @@ struct NumberBox: View {
     let col: Int
     let content: Int
     let boxSize: CGFloat
-    @Binding var selectedBox: (Int, Int)
+    @Binding var game: Game
+    // @Binding var selectedBox: (Int, Int)
     var onPress: (Int, Int) -> Void
     
     let highlightColor = Color.yellow
@@ -119,11 +120,13 @@ struct NumberBox: View {
         .font(.system(size: boxSize * 0.8))
         .foregroundStyle(Color.black)
         .background(
-            selectedBox.0 == row && selectedBox.1 == col
+            game.selected.0 == row && game.selected.1 == col
                 ? highlightColor.opacity(0.5)
-                : selectedBox.0 == row || selectedBox.1 == col
-                    ? highlightColor.opacity(0.2)
-                    : Color.clear
+            : game.selected.0 == row || game.selected.1 == col
+                ? highlightColor.opacity(0.2)
+            : game.board[game.selected.0][game.selected.1] == game.board[row][col] && game.board[row][col] != 0
+                ? highlightColor.opacity(0.4)
+            : Color.clear
         )
         .overlay(
             Rectangle()
@@ -189,9 +192,8 @@ struct StartPage: View {
 struct BoardPage: View {
     let stopPlaying: () -> Void
     let difficulty: String
-    @State private var selectedBox = (0, 0)
-    @State private var grid =  Array(repeating: Array(repeating: 0, count: 9), count: 9)
     @State private var isLoading = true
+    @State private var game = Game()
     
     var body: some View {
         VStack {
@@ -200,8 +202,8 @@ struct BoardPage: View {
             } else {
                 VStack {
                     Spacer()
-                    Board(selectedBox: $selectedBox, grid: $grid)
-                    NumberButtons(selectedBox: $selectedBox, grid: $grid)
+                    Board(game: $game)
+                    NumberButtons(game: $game)
                 }
             }
         }
@@ -214,7 +216,9 @@ struct BoardPage: View {
     
     func generateNewSudoku(difficulty: String) async {
         isLoading = true
-        grid = await generateSudoku(difficulty: difficulty)
+        let (grid, solution) = await generateSudoku(difficulty: difficulty)
+        game.board = grid
+        game.solution = solution
         isLoading = false
     }
 
