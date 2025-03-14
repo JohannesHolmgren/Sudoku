@@ -12,6 +12,26 @@ struct Game {
     var board: [[Int]] = Array(repeating: Array(repeating: 0, count: 9), count: 9)
     var solution: [[Int]] = Array(repeating: Array(repeating: 0, count: 9), count: 9)
     var selected : (Int, Int) = (0, 0)
+    
+    mutating func resetBoard() -> Void {
+        self.board = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+    }
+    
+    func hasWon() -> Bool {
+        return true
+        // return isFull() && isValidSudoku(grid: board)
+    }
+    
+    func isFull() -> Bool {
+        for row in 0..<9 {
+            for col in 0..<9 {
+                if board[row][col] == 0 {
+                    return false
+                }
+            }
+        }
+        return true
+    }
 }
 
 
@@ -44,9 +64,9 @@ struct NumberButton: View {
         Button("\(number)") {
             onPress(number)
         }
-        .font(.system(size: 32))
+        .font(.system(size: 42))
         .fontWeight(Font.Weight.medium)
-        .padding(7)
+        .padding(5)
         .foregroundStyle(Color.black)
     }
 }
@@ -91,7 +111,7 @@ struct Board: View {
                 Spacer()
             }
         }
-        .padding()
+        // .padding()
     }
 }
 
@@ -104,7 +124,7 @@ struct NumberBox: View {
     // @Binding var selectedBox: (Int, Int)
     var onPress: (Int, Int) -> Void
     
-    let highlightColor = Color.yellow
+    let highlightColor = Color.red
     
     // Setup border logic
     
@@ -199,6 +219,16 @@ struct BoardPage: View {
         VStack {
             if isLoading {
                 ProgressView("Generating Sudoku...")
+            } else if game.hasWon() {
+                VStack {
+                    Text("You Won!!!")
+                    Button(action: {
+                        game.resetBoard()
+                        stopPlaying()
+                    }) {
+                        Text("Back to Start")
+                    }
+                }
             } else {
                 VStack {
                     Spacer()
@@ -211,7 +241,6 @@ struct BoardPage: View {
         .task {
             await generateNewSudoku(difficulty: difficulty)
         }
-        
     }
     
     func generateNewSudoku(difficulty: String) async {

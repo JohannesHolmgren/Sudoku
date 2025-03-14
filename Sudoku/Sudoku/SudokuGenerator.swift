@@ -80,7 +80,7 @@ func generateSudoku(difficulty: String) async -> ([[Int]], [[Int]]) {
     
     var board = Array(repeating: Array(repeating: 0, count: 9), count: 9)
     createFilledBoard(board: &board, sets: &sets)
-    var filledBoard = board
+    let filledBoard = board
     
     // Check if valid
     if !isValidSudoku(grid: board) {
